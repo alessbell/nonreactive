@@ -1,55 +1,78 @@
-/*** SCHEMA ***/
+import { faker } from "@faker-js/faker";
 import {
   GraphQLSchema,
   GraphQLObjectType,
   GraphQLID,
   GraphQLString,
   GraphQLList,
-} from 'graphql';
+} from "graphql";
 
-const PersonType = new GraphQLObjectType({
-  name: 'Person',
+faker.seed(18);
+
+const createRandomUser = () => ({
+  id: faker.string.uuid(),
+  name: faker.person.fullName(),
+});
+
+const UserType = new GraphQLObjectType({
+  name: "User",
   fields: {
     id: { type: GraphQLID },
     name: { type: GraphQLString },
   },
 });
 
-const peopleData = [
-  { id: 1, name: 'John Smith' },
-  { id: 2, name: 'Sara Smith' },
-  { id: 3, name: 'Budd Deey' },
-];
+const userData = faker.helpers.multiple(createRandomUser, {
+  count: 2000,
+});
 
 const QueryType = new GraphQLObjectType({
-  name: 'Query',
+  name: "Query",
   fields: {
-    people: {
-      type: new GraphQLList(PersonType),
-      resolve: () => peopleData,
+    users: {
+      type: new GraphQLList(UserType),
+      resolve: () => userData,
     },
   },
 });
 
 const MutationType = new GraphQLObjectType({
-  name: 'Mutation',
+  name: "Mutation",
   fields: {
-    addPerson: {
-      type: PersonType,
+    addUser: {
+      type: UserType,
       args: {
         name: { type: GraphQLString },
       },
       resolve: function (_, { name }) {
-        const person = {
-          id: peopleData[peopleData.length - 1].id + 1,
+        const user = {
+          id: userData[userData.length - 1].id + 1,
           name,
         };
 
-        peopleData.push(person);
-        return person;
-      }
+        userData.push(user);
+        return user;
+      },
+    },
+    editUser: {
+      type: UserType,
+      args: {
+        name: { type: GraphQLString },
+        id: { type: GraphQLID },
+      },
+      resolve: function (_, { name, id }) {
+        const user = {
+          id,
+          name,
+        };
+        userData[id] = user;
+        return user;
+      },
     },
   },
 });
 
-export const schema = new GraphQLSchema({ query: QueryType, mutation: MutationType });
+export const schema = new GraphQLSchema({
+  query: QueryType,
+  mutation: MutationType,
+});

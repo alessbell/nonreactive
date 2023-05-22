@@ -1,6 +1,4 @@
-/*** APP ***/
 import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 import {
   ApolloClient,
@@ -10,24 +8,29 @@ import {
   useQuery,
   useMutation,
 } from "@apollo/client";
-
+import { createFragmentRegistry } from "@apollo/client/cache";
+import Table from "./components/table.jsx";
 import { link } from "./link.js";
-import { Subscriptions } from "./subscriptions.jsx";
-import { Layout } from "./layout.jsx";
 import "./index.css";
 
-const ALL_PEOPLE = gql`
-  query AllPeople {
-    people {
+export const UserFragment = gql`
+  fragment UserFragment on User {
+    name
+  }
+`;
+
+const ALL_USERS = gql`
+  query AllUsers {
+    users {
       id
-      name
+      ...UserFragment @nonreactive
     }
   }
 `;
 
-const ADD_PERSON = gql`
-  mutation AddPerson($name: String) {
-    addPerson(name: $name) {
+const ADD_USER = gql`
+  mutation AddUser($name: String) {
+    addUser(name: $name) {
       id
       name
     }
@@ -36,17 +39,17 @@ const ADD_PERSON = gql`
 
 function App() {
   const [name, setName] = useState("");
-  const { loading, data } = useQuery(ALL_PEOPLE);
+  const { data } = useQuery(ALL_USERS);
 
-  const [addPerson] = useMutation(ADD_PERSON, {
-    update: (cache, { data: { addPerson: addPersonData } }) => {
-      const peopleResult = cache.readQuery({ query: ALL_PEOPLE });
+  const [addUser] = useMutation(ADD_USER, {
+    update: (cache, { data: { addUser: addUserData } }) => {
+      const usersResult = cache.readQuery({ query: ALL_USERS });
 
       cache.writeQuery({
-        query: ALL_PEOPLE,
+        query: ALL_USERS,
         data: {
-          ...peopleResult,
-          people: [...peopleResult.people, addPersonData],
+          ...usersResult,
+          users: [...usersResult.users, addUserData],
         },
       });
     },
@@ -54,9 +57,7 @@ function App() {
 
   return (
     <main>
-      <h3>Home</h3>
-      <div className="add-person">
-        <label htmlFor="name">Name</label>
+      <div className="add-user">
         <input
           type="text"
           name="name"
@@ -65,30 +66,25 @@ function App() {
         />
         <button
           onClick={() => {
-            addPerson({ variables: { name } });
+            addUser({ variables: { name } });
             setName("");
           }}
         >
-          Add person
+          Add user
         </button>
       </div>
-      <h2>Names</h2>
-      {loading ? (
-        <p>Loading…</p>
-      ) : (
-        <ul>
-          {data?.people.map((person) => (
-            <li key={person.id}>{person.name}</li>
-          ))}
-        </ul>
-      )}
+      <Table users={data?.users} />
     </main>
   );
 }
 
 const client = new ApolloClient({
-  cache: new InMemoryCache(),
   link,
+  cache: new InMemoryCache({
+    fragments: createFragmentRegistry(gql`
+      ${UserFragment}
+    `),
+  }),
 });
 
 const container = document.getElementById("root");
@@ -96,13 +92,6 @@ const root = createRoot(container);
 
 root.render(
   <ApolloProvider client={client}>
-    <Router>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<App />} />
-          <Route path="subscriptions-wslink" element={<Subscriptions />} />
-        </Route>
-      </Routes>
-    </Router>
+    <App />
   </ApolloProvider>
 );
