@@ -6,7 +6,6 @@ import {
   InMemoryCache,
   gql,
   useQuery,
-  useMutation,
 } from "@apollo/client";
 import { createFragmentRegistry } from "@apollo/client/cache";
 import Table from "./components/table.jsx";
@@ -19,7 +18,7 @@ export const UserFragment = gql`
   }
 `;
 
-const ALL_USERS = gql`
+export const ALL_USERS = gql`
   query AllUsers {
     users {
       id
@@ -28,51 +27,11 @@ const ALL_USERS = gql`
   }
 `;
 
-const ADD_USER = gql`
-  mutation AddUser($name: String) {
-    addUser(name: $name) {
-      id
-      name
-    }
-  }
-`;
-
 function App() {
-  const [name, setName] = useState("");
   const { data } = useQuery(ALL_USERS);
-
-  const [addUser] = useMutation(ADD_USER, {
-    update: (cache, { data: { addUser: addUserData } }) => {
-      const usersResult = cache.readQuery({ query: ALL_USERS });
-
-      cache.writeQuery({
-        query: ALL_USERS,
-        data: {
-          ...usersResult,
-          users: [...usersResult.users, addUserData],
-        },
-      });
-    },
-  });
 
   return (
     <main>
-      <div className="add-user">
-        <input
-          type="text"
-          name="name"
-          value={name}
-          onChange={(evt) => setName(evt.target.value)}
-        />
-        <button
-          onClick={() => {
-            addUser({ variables: { name } });
-            setName("");
-          }}
-        >
-          Add user
-        </button>
-      </div>
       <Table users={data?.users} />
     </main>
   );

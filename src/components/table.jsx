@@ -4,7 +4,7 @@ import {
   useFragment_experimental as useFragment,
   useMutation,
 } from "@apollo/client";
-import { UserFragment } from "../index.jsx";
+import { UserFragment, ALL_USERS } from "../index.jsx";
 
 const EDIT_USER = gql`
   mutation EditUser($name: String, $id: ID) {
@@ -15,6 +15,62 @@ const EDIT_USER = gql`
   }
 `;
 
+const ADD_USER = gql`
+  mutation AddUser($name: String) {
+    addUser(name: $name) {
+      id
+      name @nonreactive
+    }
+  }
+`;
+
+function AddUser() {
+  const [name, setName] = React.useState("");
+  const [addUser] = useMutation(ADD_USER, {
+    update: (cache, { data: { addUser: addUserData } }) => {
+      const usersResult = cache.readQuery({ query: ALL_USERS });
+
+      cache.writeQuery({
+        query: ALL_USERS,
+        data: {
+          ...usersResult,
+          users: [...usersResult.users, addUserData],
+        },
+      });
+    },
+  });
+  return (
+    <div className="flex gap-x-4 sm:ml-16 sm:mt-0">
+      <div className="flex mt-4">
+        <label htmlFor="name" className="sr-only">
+          Name
+        </label>
+        <div>
+          <input
+            type="text"
+            name="name"
+            id="name"
+            placeholder="Sarah Smith"
+            onChange={(evt) => setName(evt.target.value)}
+            value={name}
+            className="min-w-0 flex-auto rounded-md border-0 px-3.5 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+          />
+        </div>
+      </div>
+      <button
+        type="submit"
+        onClick={() => {
+          addUser({ variables: { name } });
+          setName("");
+        }}
+        className=" mt-4 flex-none rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      >
+        Add user
+      </button>
+    </div>
+  );
+}
+
 export default function Example({ users }) {
   return (
     <div className="px-4 sm:px-6 lg:px-8">
@@ -24,14 +80,7 @@ export default function Example({ users }) {
             Users
           </h1>
         </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
-          <button
-            type="button"
-            className="block rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-          >
-            Add user
-          </button>
-        </div>
+        <AddUser />
       </div>
       <div className="mt-8 flow-root">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -73,37 +122,26 @@ function User({ id, index }) {
   });
   const [isEditing, setIsEditing] = React.useState(false);
   const [name, setName] = React.useState(user.name);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [editUser] = useMutation(EDIT_USER, {
-    update: (cache, { data: { editUser: editUserData } }) => {
-      setIsLoading(false);
-    },
-  });
-
-  React.useEffect(() => {
-    if (name !== user.name) {
-      editUser({
-        variables: { name, id },
-      });
-    }
-  }, [name]);
+  const [editUser] = useMutation(EDIT_USER);
 
   return (
     <tr className="even:bg-gray-50">
       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-3">
         {isEditing ? (
           <div>
-            <label htmlFor="email" className="sr-only">
-              Email
+            <label htmlFor="name" className="sr-only">
+              Name
             </label>
             <div className="mt-2">
               <input
-                type="email"
-                name="email"
-                id="email"
+                type="text"
+                name="name"
+                id="name"
                 onChange={(e) => {
-                  setIsLoading(true);
                   setName(e.currentTarget.value);
+                  editUser({
+                    variables: { name: e.currentTarget.value, id },
+                  });
                 }}
                 value={name}
                 className="block w-full rounded-md border-0 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
@@ -112,16 +150,7 @@ function User({ id, index }) {
           </div>
         ) : (
           <div>
-            {name}{" "}
-            <span
-              style={{
-                backgroundColor: `rgba(0, 0, 0, ${
-                  (index * Math.random()) / 100
-                })`,
-              }}
-            >
-              {Math.random()}
-            </span>
+            {name} {Math.random()}
           </div>
         )}
       </td>
