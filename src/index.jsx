@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ApolloClient,
@@ -11,6 +11,7 @@ import {
 } from "@apollo/client";
 import { createFragmentRegistry } from "@apollo/client/cache";
 import { link } from "./link.js";
+import { AddUser } from "./AddUser.jsx";
 
 export const UserFragment = gql`
   fragment UserFragment on User {
@@ -45,68 +46,11 @@ const EDIT_USER = gql`
   }
 `;
 
-const ADD_USER = gql`
-  mutation AddUser($name: String) {
-    addUser(name: $name) {
-      id
-      name
-    }
-  }
-`;
-
-function AddUser() {
-  const [name, setName] = React.useState("");
-  const [addUser] = useMutation(ADD_USER, {
-    update: (cache, { data: { addUser: addUserData } }) => {
-      const usersResult = cache.readQuery({ query: ALL_USERS });
-      cache.writeQuery({
-        query: ALL_USERS,
-        data: {
-          ...usersResult,
-          users: [...usersResult.users, addUserData],
-        },
-      });
-    },
-  });
-  return (
-    <div>
-      <div>
-        <label htmlFor="name">Name</label>
-        <div>
-          <input
-            type="text"
-            name="name"
-            id="name"
-            placeholder="Sarah Smith"
-            onChange={(evt) => setName(evt.target.value)}
-            value={name}
-          />
-        </div>
-      </div>
-      <button
-        type="submit"
-        onClick={() => {
-          addUser({ variables: { name } });
-          setName("");
-        }}
-      >
-        Add user
-      </button>
-    </div>
-  );
-}
-
-const UserComponent = function User({ id }) {
-  const { data: user } = useFragment({
-    fragment: UserFragment,
-    from: {
-      __typename: "User",
-      id,
-    },
-  });
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [name, setName] = React.useState(user.name);
+function UserComponent({ user }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(user.name);
   const [editUser] = useMutation(EDIT_USER);
+
   return (
     <tr>
       <td>
@@ -118,7 +62,7 @@ const UserComponent = function User({ id }) {
             onChange={(e) => {
               setName(e.currentTarget.value);
               editUser({
-                variables: { name: e.currentTarget.value, id },
+                variables: { name: e.currentTarget.value, id: user.id },
               });
             }}
             value={name}
@@ -140,10 +84,25 @@ const UserComponent = function User({ id }) {
       </td>
     </tr>
   );
-};
+}
 
-function UsersTable({ query }) {
+function UseFragmentUserComponent({ id }) {
+  const { data: user } = useFragment({
+    fragment: UserFragment,
+    from: {
+      __typename: "User",
+      id,
+    },
+  });
+
+  return <UserComponent user={user} />;
+}
+
+const MemoizedUserComponent = memo(UserComponent);
+
+function UsersTable({ query, shouldMemoize }) {
   const { data } = useQuery(query);
+
   return (
     <main>
       <h1>Users</h1>
@@ -156,9 +115,14 @@ function UsersTable({ query }) {
           </tr>
         </thead>
         <tbody>
-          {data?.users.map((user) => (
-            <UserComponent key={user.id} id={user.id} />
-          ))}
+          {data?.users.map((user) => {
+            if (query === ALL_USERS_NONREACTIVE) {
+              return <UseFragmentUserComponent key={user.id} id={user.id} />;
+            } else if (shouldMemoize) {
+              return <MemoizedUserComponent key={user.id} user={user} />;
+            }
+            return <UserComponent key={user.id} user={user} />;
+          })}
         </tbody>
       </table>
     </main>
@@ -166,32 +130,53 @@ function UsersTable({ query }) {
 }
 
 function App() {
-  const [query, setQuery] = React.useState(ALL_USERS);
+  const [query, setQuery] = useState(ALL_USERS);
+  const [shouldMemoize, setShouldMemoize] = useState(false);
+
   return (
     <>
       <div>
-        <label>
+        <label style={{ marginRight: "1rem" }}>
           <input
             value="slow"
             type="radio"
             name="queryVersion"
-            checked={query === ALL_USERS}
-            onChange={() => setQuery(ALL_USERS)}
+            checked={query === ALL_USERS && !shouldMemoize}
+            onChange={() => {
+              setShouldMemoize(false);
+              setQuery(ALL_USERS);
+            }}
           />{" "}
           Slow
         </label>
-        <label>
+        <label style={{ marginRight: "1rem" }}>
           <input
-            value="fast"
+            value="memo"
+            type="radio"
+            name="queryVersion"
+            checked={shouldMemoize}
+            onChange={() => {
+              setShouldMemoize(true);
+              setQuery(ALL_USERS);
+            }}
+          />{" "}
+          Fast (memo)
+        </label>
+        <label style={{ marginRight: "1rem" }}>
+          <input
+            value="nonreactive"
             type="radio"
             name="queryVersion"
             checked={query === ALL_USERS_NONREACTIVE}
-            onChange={() => setQuery(ALL_USERS_NONREACTIVE)}
+            onChange={() => {
+              setShouldMemoize(false);
+              setQuery(ALL_USERS_NONREACTIVE);
+            }}
           />{" "}
-          Fast
+          Fast (@nonreactive)
         </label>
       </div>
-      <UsersTable query={query} />
+      <UsersTable query={query} shouldMemoize={shouldMemoize} />
     </>
   );
 }
